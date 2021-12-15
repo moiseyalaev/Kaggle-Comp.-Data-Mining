@@ -10,7 +10,7 @@ Machine Learning Models attempted for predictions:
 * Deep and Prunned Regression Trees
 * Bagging and Boosting
 * Random Forests (Best Model for Predictions)
-* Artifical Neural Networks for Regression
+* Artificial Neural Networks for Regression
 
 
 Kaggle Competition Link:  

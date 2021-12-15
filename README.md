@@ -1,7 +1,7 @@
 # Kaggle-Comp.-Data-Mining
-Kaggle Competition using 15 numerical predictors to predict a continuous outcome.
+Kaggle Competition using 15 numerical predictors to predict a continuous outcome as part of a final project for a stats data mining course. I later went back and extended work to include more models/attempts.
 
-Machine Learning Models attempted for predictions
+Machine Learning Models attempted for predictions:
 * Simple Multiple Linear Regression
 * Polynomial Regression
 * Ridge and Lasso Regression
@@ -10,7 +10,9 @@ Machine Learning Models attempted for predictions
 * Deep and Prunned Regression Trees
 * Bagging and Boosting
 * Random Forests (Best Model for Predictions)
+* Artifical Neural Networks for Regression
 
 
-Kaggle Competition Link:
+Kaggle Competition Link:  
+
 https://www.kaggle.com/c/ucla-stats-101c-2021-lec3-new/overview

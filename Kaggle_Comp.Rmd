@@ -1,0 +1,343 @@
+---
+title: "Kaggle_Competition"
+author: "Moisey Alaev"
+date: "12/1/2021"
+output: pdf_document
+---
+
+# Data Loading
+
+```{r}
+# Read in data
+train <- read.csv("data/training.csv")
+test <- read.csv("data/test.csv")
+
+dim(train) # train: 1000 obs by 17 features
+dim(test) # test 2750 obs by 16 features (no Y)
+names(train) # "Id", "Y", "X1", "X2", ..., "X15"
+# head(train)
+
+# Split training set into a sample train and test set
+set.seed(1234)
+sample.size <- floor(0.7*nrow(train))
+train.ind <- sample(seq_len(nrow(train)), size=sample.size, replace=F)
+
+train.sample<- train[train.ind,]
+test.sample <- train[-train.ind,]
+dim(train.sample) # 700 obs with 17 features 
+dim(test.sample) # 300 obs with 17 features
+```
+
+## Analyzing Data
+
+```{r}
+library(corrplot)
+
+# Correlation matrix
+corr <- cor(cbind(train$Y, train$X1, train$X2, train$X3, train$X4, train$X5, train$X6, train$X7, train$X8., train$X10, 
+                    train$X11, train$X12, train$X13, train$X14, train$X15))
+
+# PLot corrs
+corrplot.mixed(corr, lower="number", upper="pie")
+```
+
+## Simple Multiple Linear Regression 
+
+```{r}
+# Build full MLR model using training sample data
+linear.model <- lm(Y~., data=train.sample)
+summary(linear.model)
+
+# Test MSE for full MLR
+linear.pred <- predict(linear.model, newdata=test.sample[,-2])
+test.error.linear <- mean((test.sample$Y - linear.pred)^2)
+test.error.linear
+```
+
+## Polynomial Regression
+
+```{r}
+# Build Poly regression model with X4^2
+poly.model <- glm(Y~poly(X4 ,degree=2), data=train.sample)
+summary(poly.model)
+
+# Test MSE for poly regression with X4^2
+poly.pred <- predict(poly.model, newdata=test.sample[,-2])
+test.error.poly <- mean((test.sample$Y - poly.pred)^2)
+test.error.poly
+```
+
+## Ridge Regression
+
+```{r}
+library(glmnet)
+
+set.seed(1234)
+
+# Matrisize sample train and test data + make grid of lambdas
+X.train <- as.matrix(train.sample)[,-2]
+Y.train <- train.sample$Y
+X.test <- as.matrix(train.sample)
+grid <- 10^seq(10, -2, length = 100)
+
+# Build ridge model from sample train data
+ridge.model <- glmnet(X.train, Y.train, family="gaussian", 
+                alpha=0, lambda=grid, standardize = TRUE)
+
+# CV for lambdas in ridge re
+cv.res <- cv.glmnet(X.train, Y.train, family="gaussian", alpha=0, 
+                       lambda=grid, standardize=TRUE, nfolds=10)
+
+# PLot CV
+plot(cv.res)
+best.ridge.lambda<- cv.res$lambda.min
+
+# Test MSE for ridge reg.
+ridge.pred <- predict(ridge.model, s=best.ridge.lambda, newx=X.test[,-2])
+test.error.ridge <- mean((test.sample$Y - ridge.pred)^2)
+test.error.ridge
+```
+
+## Lasso Regression
+
+```{r}
+set.seed(1234)
+
+# Matrisize sample train and test data + make grid of lambdas
+X.train <- as.matrix(train.sample)[,-2]
+Y.train <- train.sample$Y
+X.test <- as.matrix(train.sample)
+grid <- 10 ^ seq(10, -2, length = 100)
+
+# Build lasso model from sample train data
+lasso.model <- glmnet(X.train, Y.train, family="gaussian", 
+                alpha=0, lambda=grid, standardize = TRUE)
+
+# CV for lambdas in lasso reg.
+cv.res <- cv.glmnet(X.train, Y.train, family="gaussian", alpha=1, 
+                       lambda=grid, standardize=TRUE, nfolds=10)
+
+# PLot CV
+plot(cv.res)
+best.lasso.lambda<- cv.res$lambda.min
+
+# Test MSE for lasso reg
+lasso.pred <- predict(lasso.model, s=best.lasso.lambda, newx=X.test[,-2]) # type='coefficients'
+test.error.lasso <- mean((test.sample$Y - lasso.pred)^2)
+test.error.lasso
+```
+
+## Principal Component Regression
+
+```{r}
+library(pls)
+
+# Find optimal M principal components using CV
+pcr.model <- pcr(Y ~., data=train.sample, scale=T, validation="CV")
+summary(pcr.model) # optimal M=10
+
+# Build PCR model using M=10 on sample trian data
+pcr.model <- pcr(Y ~., data=train.sample, scale=T, ncomp=10)
+summary(pcr.model)
+
+# Test MSE for optimal PCR model
+pcr.pred <-  predict(pcr.model, newdata=test.sample[,-2])
+mean((test.sample$Y - pcr.pred)^2)
+```
+
+
+## Support Vecotr Classifiers (SVC)
+
+```{r}
+library(e1071)
+
+set.seed(123)
+
+# Find ideal cost value for SVCs through tunning 
+tune.result <- tune(svm, Y~., data=train.sample, kernel="linear", 
+                 range=list(cost=seq(0.01, 10, by=0.5)))
+summary(tune.result) # optimal cost = 0.01
+
+# Build Support Vector Classifier using linear kernel with cost=0.01
+svc.model <- svm(Y~., data=train.sample, kernel="linear", cost=0.01, scale=F)
+summary(svc.model)
+
+# Test MSE for SVC
+svc.pred <- predict(svc.model, newdata=test.sample[,-2])
+mean((test.sample$Y - svc.pred)^2)
+```
+
+## Support Vector Machine
+
+```{r}
+set.seed(123)
+
+# Tune for ideal cost value for SVM that uses a radial kernal
+tune.result <- tune(svm, Y~., data=train.sample, kernel="radial", 
+                 ranges=list(cost = seq(0.01, 10, by=0.5)))
+summary(tune.result) # optimal cost = 0.51
+
+# Build Support Vector Machine using radial kernel with cost=0.51
+svm.radial.model <- svm(Y~., data=train.sample, kernel="radial", cost=0.51, scale=F)
+summary(svm.radial.model)
+
+# Test MSE for SVM with radial kernel 
+svm.radial.pred <- predict(svm.radial.model, newdata=test.sample[,-2])
+mean((test.sample$Y - svm.radial.pred)^2)
+
+# ============== Repeat above steps for SVM with polynomial kernal of degree=2 ===============
+
+# Tune for ideal cost value for SVM that uses a poly kernal s.t degree=2
+tune.result <- tune(svm, Y~., data=train.sample, kernel="polynomial", 
+                    degree=2, ranges=list(cost = seq(0.01, 10, by=0.5)))
+summary(tune.result) # optimal cost = 0.01
+
+# Build Support Vector Machine using poly kernel, s.t deg=2, with cost=0.01
+svm.poly.model <- svm(Y~., data=train.sample, kernel="radial", cost=0.01, scale=F)
+summary(svm.poly.model)
+
+# Test MSE for SVM with poly deg=2 kernel
+svm.poly.pred <- predict(svm.poly.model, newdata=test.sample[,-2])
+mean((test.sample$Y - svm.poly.pred)^2)
+
+```
+
+
+## Regression Trees
+
+```{r}
+library(tree)
+
+# build regression tree using sample train data
+tree.model <- tree(Y~., data=train.sample)
+summary(tree.model)
+
+# show full deep regression tree
+plot(tree.model)
+text(tree.model, pretty=0)
+
+# Test MSE for deep regression tree
+tree.pred <- predict(tree.model, newdata=test.sample[,-2])
+test.error.tree <- mean((test.sample$Y - tree.pred)^2)
+test.error.tree
+
+# Try Prunning Tree using CV
+set.seed(1234)
+cv.tree.res <- cv.tree(tree.model, FUN=prune.tree)
+
+# Plot results of CV
+plot(cv.tree.res$size, cv.tree.res$dev, type = "b")
+points(cv.tree.res$size, cv.tree.res$dev)
+
+# Build prunded model
+prune.tree.model <- prune.tree(tree.model, best=3)
+summary(prune.tree.model)
+plot(prune.tree.model)
+text(prune.tree.model, pretty=0)
+
+# Looks like prunining tree to "ideal" size worsens MSE (higher bias but less variance)
+prune.tree.pred <- predict(prune.tree.model, newdata=test.sample[,-2])
+test.error.prune.tree <- mean((test.sample$Y - prune.tree.pred)^2)
+test.error.prune.tree
+```
+
+
+# Bagging Trees
+
+```{r}
+
+bag.model <- randomForest(Y~., data=train.sample, mtry=5, importance=T)
+bag.model
+
+bag.pred <- predict(bag.model, newdata=test.sample[,-2])
+test.error.bag <- mean((test.sample$Y - bag.pred)^2)
+test.error.bag
+```
+
+## Boosting Trees
+
+```{r}
+library(gbm)
+set.seed(1)
+
+# Range for Lambdas and vector of errors for each lambda
+lambdas <- 10 ^ (seq(-15, -0.2, by = 0.1))
+train.errors <- rep(0, length(lambdas))
+
+# cross validation for best lambda
+for (i in 1:length(lambdas)) {
+    boost.model = gbm(Y~., data=train.sample, distribution="gaussian", 
+                      n.trees=1000, shrinkage=lambdas[i])
+    train.pred = predict(boost.model, newdata=test.sample, n.trees=1000)
+    train.errors[i] = mean((train.pred - test.sample$Y)^2)
+}
+
+# ploting shrinkage values vs test MSE
+plot(lambdas, train.errors, xlab="Shrinkage values", ylab="Testing MSE")
+
+# build boosted trees models with sample train data
+boost.model <- gbm(Y~., data=train.sample, distribution="gaussian", n.trees=1000, shrinkage=0.01)
+pred.boost <- predict(boost.model, newdata=test.sample[,-2], n.trees=1000)
+test.error.boost<- mean((test.sample$Y - pred.boost)^2)
+test.error.boost
+
+# build boosted trees models with full train data
+boost.model <- gbm(Y~., data=train, distribution = "gaussian", n.trees=5000, shrinkage= 0.001)
+predict.for.train <- predict(boost.model, newdata = test.sample[,-2])
+mean((test.sample$Y - predict.for.train)^2)
+```
+
+## Random Forest
+
+```{r}
+library(caret)
+library(randomForest)
+
+set.seed(123)
+
+# Use the out-of-bag estimator to get optimal M (num predictors per oob)
+oob_train_control <- trainControl(method="oob", classProbs=T, savePredictions=T)
+
+# We find the best value for m using cross validation
+forestfit <- train(Y~X2+X4+X12+X13+X14+X15, data=train, method='rf', 
+                   importance=F, trControl=oob_train_control)
+
+plot(forestfit) # m = 2 is optimal given data
+
+# build RF with m = 2  using sample train data
+forest.model <- randomForest(Y~., data=train.sample, mtry=2,
+                             ntree=1000, importance = T) 
+forest.model
+
+# test MSE for m=2 with sample train data
+pred.RF <- predict(forestfit, newdata=test.sample[,-2])
+mean((test.sample$Y - pred.RF)^2)
+
+# full forest model using full data
+full.forest.model <- randomForest(Y~., data=train, mtry=2,
+                             ntree=1000, importance=T) 
+full.forest.model
+
+importance(full.forest.model) #X2+X4+X12+X13+X14+X1
+
+best.forest.model <- randomForest(Y~X2+X4+X12+X13+X14+X15, data=train, mtry=2,
+                             ntree=1000, importance=T)
+best.forest.model
+```
+
+## Submissions
+
+```{r}
+best.model <- best.forest.model
+best.pred <- predict(best.model, newdata=test)
+sub <- data.frame(test[, 1], best.pred)
+
+colnames(sub)[1] <- "Id"
+colnames(sub)[2] <- "pred"
+# sub
+
+# write.csv(sub, file="sub6.csv", row.names=FALSE)
+```
+
+
+

@@ -1,5 +1,5 @@
 # Kaggle-Comp.-Data-Mining
-Kaggle Competition using 15 numerical predictors to predict a continuous outcome as part of a final project using R (and some python) for a stats data mining course. I later went back and extended work to include more models/attempts.
+Kaggle Competition using 15 numerical predictors to predict a continuous outcome as part of a final project using R (and some python) for a statistics data mining course. I later went back and extended work to include more models/attempts.
 
 Machine Learning Models attempted for predictions:
 * Simple Multiple Linear Regression
